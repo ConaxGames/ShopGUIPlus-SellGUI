@@ -19,6 +19,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import net.brcdev.shopgui.ShopGuiPlugin;
+import net.mackenziemolloy.shopguiplus.sellgui.conax.SellGUIPrePriceEvent;
 import net.mackenziemolloy.shopguiplus.sellgui.objects.ShopItemPriceValue;
 import net.mackenziemolloy.shopguiplus.sellgui.utility.sirblobman.HexColorUtility;
 import org.apache.commons.lang3.text.WordUtils;
@@ -223,10 +224,25 @@ public final class CommandSellGUI implements TabExecutor {
         
         CommentedConfiguration configuration = this.plugin.getConfiguration();
         int guiSize = configuration.getInt("options.rows");
+
+        // start conax
+        if (player.hasPermission("sellgui.rows.6")) {
+            guiSize = 6;
+        } else if (player.hasPermission("sellgui.rows.5")) {
+            guiSize = 5;
+        } else if (player.hasPermission("sellgui.rows.4")) {
+            guiSize = 4;
+        } else if (player.hasPermission("sellgui.rows.3")) {
+            guiSize = 3;
+        } else if (player.hasPermission("sellgui.rows.2")) {
+            guiSize = 2;
+        }
+        // end conax
+
         if(guiSize > 6 || guiSize < 1) {
             guiSize = 6;
         }
-        
+
         String sellGuiTitle = getMessage("sellgui_title", null);
         Gui gui = new Gui(guiSize, sellGuiTitle, Collections.emptySet());
         PlayerHandler.playSound(player, "open");
@@ -439,7 +455,7 @@ public final class CommandSellGUI implements TabExecutor {
                 int amount = i.getAmount();
             
                 double itemSellPrice = itemStackSellPriceCache.containsKey(singleItem) ? ( itemStackSellPriceCache.get(singleItem).getSellPrice() * amount ) : ShopHandler.getItemSellPrice(i, player);
-            
+
                 totalPrice = totalPrice + itemSellPrice;
             
                 EconomyType itemEconomyType = ShopHandler.getEconomyType(i);
@@ -458,7 +474,10 @@ public final class CommandSellGUI implements TabExecutor {
             
                 double totalSold2 = moneyMap.getOrDefault(itemEconomyType, 0.0);
                 double amountSold2 = (totalSold2 + itemSellPrice);
-                moneyMap.put(itemEconomyType, amountSold2);
+
+                SellGUIPrePriceEvent preItemSaleEvent = new SellGUIPrePriceEvent(player, SingleItemStack, amount, amountSold2);
+                Bukkit.getPluginManager().callEvent(preItemSaleEvent);
+                moneyMap.put(itemEconomyType, preItemSaleEvent.getPrice());
             
                 //Item considered sold at this point
                 //Requires reflection to instantiate constructors at runtime not contained in the api
@@ -492,7 +511,6 @@ public final class CommandSellGUI implements TabExecutor {
                 };
                 Bukkit.getScheduler().scheduleSyncDelayedTask(this.plugin, task);
             }
-        
         }
     
         if(excessItems[0]) {
