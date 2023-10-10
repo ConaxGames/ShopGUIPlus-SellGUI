@@ -476,8 +476,9 @@ public final class CommandSellGUI implements TabExecutor {
                 double amountSold2 = (totalSold2 + itemSellPrice);
 
                 // start conax
-                SellGUIPrePriceEvent preItemSaleEvent = new SellGUIPrePriceEvent(player, SingleItemStack, amount, amountSold2);
+                SellGUIPrePriceEvent preItemSaleEvent = new SellGUIPrePriceEvent(player, SingleItemStack, amount, itemSellPrice);
                 Bukkit.getPluginManager().callEvent(preItemSaleEvent);
+                // add the newly updated price (eg. tax)
                 moneyMap.put(itemEconomyType, preItemSaleEvent.getPrice());
                 // end conax
 
