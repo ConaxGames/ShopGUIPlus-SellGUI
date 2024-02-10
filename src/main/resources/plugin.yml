@@ -15,7 +15,7 @@ depend:
   - "ShopGUIPlus"
 
 commands:
-  sellgui:
+  sell:
     description: "Sell Command"
     aliases:
       - "sg"

@@ -1,6 +1,7 @@
 package net.mackenziemolloy.shopguiplus.sellgui.command;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,10 +31,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.PluginCommand;
-import org.bukkit.command.TabExecutor;
+import org.bukkit.command.*;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.HumanEntity;
@@ -68,6 +66,8 @@ import net.mackenziemolloy.shopguiplus.sellgui.utility.sirblobman.MessageUtility
 import net.mackenziemolloy.shopguiplus.sellgui.utility.sirblobman.VersionUtility;
 import org.jetbrains.annotations.Nullable;
 
+import static org.bukkit.Bukkit.getLogger;
+
 public final class CommandSellGUI implements TabExecutor {
     private final SellGUI plugin;
     
@@ -78,7 +78,7 @@ public final class CommandSellGUI implements TabExecutor {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if(args.length == 1) {
-            List<String> valueSet = Arrays.asList("rl", "reload", "debug", "dump");
+            List<String> valueSet = Arrays.asList("rl", "reload", "debug", "dump", "all");
             return StringUtil.copyPartialMatches(args[0], valueSet, new ArrayList<>());
         }
 
@@ -107,6 +107,9 @@ public final class CommandSellGUI implements TabExecutor {
             case "dump":
                 return commandDebug(sender);
 
+            case "all":
+                return commandSellAll(sender);
+
             default: break;
         }
 
@@ -114,10 +117,87 @@ public final class CommandSellGUI implements TabExecutor {
     }
 
     public void register() {
-        PluginCommand pluginCommand = this.plugin.getCommand("sellgui");
+        PluginCommand pluginCommand = this.plugin.getCommand("sell");
         if(pluginCommand != null) {
             pluginCommand.setExecutor(this);
             pluginCommand.setTabCompleter(this);
+        }
+    }
+
+    private boolean commandSellAll(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Only players can execute this command.");
+            return true;
+        }
+
+        Player player = (Player) sender;
+        if (!player.hasPermission("sellgui.all")) {
+            sendMessage(player, "no_permission");
+            return true;
+        }
+
+        if (!checkGameMode(player)) {
+            return true;
+        }
+
+        // Get all items in the player's inventory
+        Inventory inventory = player.getInventory();
+        ItemStack[] contents = inventory.getContents();
+
+        // Simulate selling all items
+        BukkitScheduler scheduler = Bukkit.getScheduler();
+        scheduler.runTask(this.plugin, () -> sellAllItems(player, contents));
+
+        return true;
+    }
+
+    // Method to sell all items in the player's inventory
+    private void sellAllItems(Player player, ItemStack[] contents) {
+        double totalPrice = 0;
+        int itemCount = 0;
+        boolean itemsSold = false;
+
+        for (ItemStack item : contents) {
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
+
+            // Calculate the sell price for each item
+            double sellPrice = ShopHandler.getItemSellPrice(item, player);
+            if (sellPrice > 0) {
+                int amount = item.getAmount();
+                totalPrice += sellPrice * amount;
+                itemCount += amount;
+                itemsSold = true;
+
+                // Remove the sold items from the player's inventory
+                player.getInventory().removeItem(item);
+            }
+        }
+
+        if (itemsSold) {
+            // Deposit money to the player
+            EconomyProvider economyProvider = ShopGuiPlusApi.getPlugin().getEconomyManager().getEconomyProvider(EconomyType.VAULT);
+            economyProvider.deposit(player, totalPrice);
+
+            double finalTotalPrice = totalPrice;
+            int finalItemCount = itemCount;
+
+            sendMessage(player, "items_sold", message ->
+                    message.replace("{earning}", economyProvider.getCurrencyPrefix() + StringFormatter.getFormattedNumber(finalTotalPrice) + economyProvider.getCurrencySuffix())
+                            .replace("{amount}", String.valueOf(finalItemCount)));
+
+            // Play sound and send titles/action bar message if configured
+            if (this.plugin.getConfiguration().getBoolean("options.sell_titles")) {
+                sendSellTitles(player, economyProvider.getCurrencyPrefix() + StringFormatter.getFormattedNumber(finalTotalPrice) + economyProvider.getCurrencySuffix(), String.valueOf(finalItemCount));
+            }
+
+            if (this.plugin.getConfiguration().getBoolean("options.action_bar_msgs") && VersionUtility.getMinorVersion() >= 8) {
+                sendActionBar(player, economyProvider.getCurrencyPrefix() + StringFormatter.getFormattedNumber(finalTotalPrice) + economyProvider.getCurrencySuffix(), String.valueOf(finalItemCount));
+            }
+        } else {
+            // Send appropriate message if no items were sold
+            sendMessage(player, "no_items_to_sell");
         }
     }
 
